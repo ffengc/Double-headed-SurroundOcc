@@ -62,7 +62,9 @@ def custom_multi_gpu_test(model, data_loader, tmpdir=None, gpu_collect=False, is
     """
 
     model.eval()
-    occ_results = []
+    occ_results_other = []
+    occ_results_road = []
+
 
     dataset = data_loader.dataset
     rank, world_size = get_dist_info()
@@ -76,15 +78,21 @@ def custom_multi_gpu_test(model, data_loader, tmpdir=None, gpu_collect=False, is
             result = model(return_loss=False, rescale=True, **data)
             # encode mask results
             if isinstance(result, dict):
-                if 'evaluation' in result.keys():
-                    occ_results.extend(result['evaluation'])
-                    batch_size = len(result['evaluation'])
+                if 'evaluation_other' in result.keys():
+                    occ_results_other.extend(result['evaluation_other'])
+                    batch_size_other = len(result['evaluation_other'])
+
+            if isinstance(result, dict):
+                if 'evaluation_road' in result.keys():
+                    occ_results_road.extend(result['evaluation_road'])
+                    batch_size_road = len(result['evaluation_road'])
             
             if is_vis:
                 batch_size = result
+            else:
+                batch_size = batch_size_other + batch_size_road
 
         if rank == 0:
-            
             for _ in range(batch_size * world_size):
                 prog_bar.update()
     
@@ -93,12 +101,15 @@ def custom_multi_gpu_test(model, data_loader, tmpdir=None, gpu_collect=False, is
     
     # collect results from all ranks
     if gpu_collect:
-        occ_results = collect_results_gpu(occ_results, len(dataset))
+        occ_results_other = collect_results_gpu(occ_results_other, len(dataset)) # 不确定第二个参数的长度要不要切开 # maybe a BUG
+        occ_results_road = collect_results_gpu(occ_results_road, len(dataset))
     else:
         tmpdir = tmpdir+'_mask' if tmpdir is not None else None
-        occ_results = collect_results_cpu(occ_results, len(dataset), tmpdir)
+        occ_results_other = collect_results_cpu(occ_results_other, len(dataset), tmpdir)
+        occ_results_road = collect_results_cpu(occ_results_road, len(dataset), tmpdir)
         
-    return occ_results
+        
+    return occ_results_other, occ_results_road
 
 
 def collect_results_cpu(result_part, size, tmpdir=None):

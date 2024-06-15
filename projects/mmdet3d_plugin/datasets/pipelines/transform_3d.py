@@ -270,13 +270,55 @@ class CustomCollect3D(object):
         data = {}
         img_metas = {}
       
-        for key in self.meta_keys:
+        for key in self.meta_keys: # 这里 17
             if key in results:
                 img_metas[key] = results[key]
 
         data['img_metas'] = DC(img_metas, cpu_only=True)
-        for key in self.keys:
-            data[key] = results[key]
+        
+        
+        # 在这里 results['gt_occ'] 的最后一列表示类别，可以进行区分了！
+        # class_names =  ['barrier','bicycle', 'bus', 'car', 'construction_vehicle', 'motorcycle',
+                # 'pedestrian', 'traffic_cone', 'trailer', 'truck', 'driveable_surface',
+                # 'other_flat', 'sidewalk', 'terrain', 'manmade','vegetation']
+        #   0: 'noise'
+        #     1: 'barrier'
+        #     2: 'bicycle'
+        #     3: 'bus'
+        #     4: 'car'
+        #     5: 'construction_vehicle'
+        #     6: 'motorcycle'
+        #     7: 'pedestrian'
+        #     8: 'traffic_cone'
+        #     9: 'trailer'
+        #     10: 'truck'
+        #     11: 'driveable_surface'
+        #     12: 'other_flat'
+        #     13: 'sidewalk'
+        #     14: 'terrain'
+        #     15: 'manmade'
+        #     16: 'vegetation'
+        # 这里切开 gt_occ -> gt_occ_road + gt_occ_others
+        # 已经确定
+        assert(self.keys == ['img', 'gt_occ_other', 'gt_occ_road'])
+        # modify by yufc
+        data['img'] = results['img']
+        driveable_surface_class_number = 11
+        # 如果第四个元素是11，则是da，否则不是
+        # 创建布尔索引，选择第四个元素为11的行
+        gt_occ_np = results['gt_occ']
+        mask = gt_occ_np[:, 3] == driveable_surface_class_number
+        # 使用布尔索引分别获取两个数组
+        gt_occ_road = gt_occ_np[mask]
+        gt_occ_other = gt_occ_np[~mask]
+        # 
+        data['gt_occ_other'] = gt_occ_other
+        data['gt_occ_road'] = gt_occ_road
+        
+        
+        # for key in self.keys: # keys: img gt_occ_road gt_occ_other
+        #     data[key] = results[key]
+        
         return data
 
     def __repr__(self):

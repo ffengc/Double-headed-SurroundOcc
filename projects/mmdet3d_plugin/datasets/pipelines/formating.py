@@ -30,9 +30,8 @@ class CustomDefaultFormatBundle3D(DefaultFormatBundle3D):
         """
         # Format 3D data
         results = super(CustomDefaultFormatBundle3D, self).__call__(results)
-
         if 'gt_occ' in results.keys():
             results['gt_occ'] = DC(to_tensor(results['gt_occ']), stack=False)
-
+        
         return results
 

@@ -40,14 +40,14 @@ class CustomNuScenesOccDataset(NuScenesDataset):
         Returns:
             dict: Training data dict of the corresponding index.
         """
-        input_dict = self.get_data_info(index)
+        input_dict = self.get_data_info(index) # 
         if input_dict is None:
             return None
         self.pre_pipeline(input_dict)
         example = self.pipeline(input_dict)
         return example
 
-    def get_data_info(self, index):
+    def get_data_info(self, index): # 0605
         """Get data info according to the given index.
 
         Args:
@@ -73,7 +73,7 @@ class CustomNuScenesOccDataset(NuScenesDataset):
             occ_size = np.array(self.occ_size),
             pc_range = np.array(self.pc_range)
         )
-
+        # 
         if self.modality['use_camera']:
             image_paths = []
             lidar2img_rts = []
@@ -95,7 +95,7 @@ class CustomNuScenesOccDataset(NuScenesDataset):
                 intrinsic = cam_info['cam_intrinsic']
                 viewpad = np.eye(4)
                 viewpad[:intrinsic.shape[0], :intrinsic.shape[1]] = intrinsic
-
+        # pass --
                 
 
                 lidar2img_rt = (viewpad @ lidar2cam_rt.T)
@@ -163,7 +163,8 @@ class CustomNuScenesOccDataset(NuScenesDataset):
         return results, tmp_dir
 
     def evaluate(self,
-                 results,
+                 results1, # mby
+                 results2,
                  metric='bbox',
                  logger=None,
                  jsonfile_prefix=None,
@@ -192,27 +193,40 @@ class CustomNuScenesOccDataset(NuScenesDataset):
             dict[str, float]: Results of each evaluation metric.
         """
 
-        results, tmp_dir = self.format_results(results, jsonfile_prefix)
+        results1, tmp_dir = self.format_results(results1, jsonfile_prefix)
+        results2, tmp_dir = self.format_results(results2, jsonfile_prefix)
+        
         results_dict = {}
         if self.use_semantic:
             class_names = {0: 'IoU'}
-            class_num = len(self.class_names) + 1
+            class_num = len(self.class_names) + 1 # 17 #BUG?
             for i, name in enumerate(self.class_names):
                 class_names[i + 1] = self.class_names[i]
             
-            results = np.stack(results, axis=0).mean(0)
+            results1 = np.stack(results1, axis=0).mean(0)
+            results2 = np.stack(results2, axis=0).mean(0)
             mean_ious = []
             
-            for i in range(class_num):
-                tp = results[i, 0]
-                p = results[i, 1]
-                g = results[i, 2]
-                union = p + g - tp
-                mean_ious.append(tp / union)
             
-            for i in range(class_num):
+            # 这里要改
+            for i in range(class_num): # 遍历所有类
+                # out1=drivable surf. select one i
+                # out2=other 
+                if i == 11: # 11表示 drivable surf
+                    tp = results1[i, 0]
+                    p = results1[i, 1]
+                    g = results1[i, 2]
+                    union = p + g - tp
+                else:
+                    tp = results2[i, 0]
+                    p = results2[i, 1]
+                    g = results2[i, 2]
+                    union = p + g - tp
+                mean_ious.append(tp / union)    # iou = tp/union #  这里去算mIoU
+            
+            for i in range(class_num):  # each class's IoU
                 results_dict[class_names[i]] = mean_ious[i]
-            results_dict['mIoU'] = np.mean(np.array(mean_ious)[1:])
+            results_dict['mIoU'] = np.mean(np.array(mean_ious)[1:]) # i=0 not used
 
 
         else:

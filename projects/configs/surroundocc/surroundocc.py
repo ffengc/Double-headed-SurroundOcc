@@ -116,7 +116,11 @@ train_pipeline = [
     dict(type='NormalizeMultiviewImage', **img_norm_cfg),
     dict(type='PadMultiViewImage', size_divisor=32),
     dict(type='DefaultFormatBundle3D', class_names=class_names, with_label=False),
-    dict(type='CustomCollect3D', keys=['img', 'gt_occ'])
+    # dict(type='CustomCollect3D', keys=['img', 'gt_occ']) # 这个类做一下修改
+    dict(type='CustomCollect3D', keys=['img', 'gt_occ_other', 'gt_occ_road'])
+    # 输入是img
+    # 输出是gt的occ
+    # keys 这里有三个
 ]
 
 test_pipeline = [
@@ -125,7 +129,8 @@ test_pipeline = [
     dict(type='NormalizeMultiviewImage', **img_norm_cfg),
     dict(type='PadMultiViewImage', size_divisor=32),
     dict(type='DefaultFormatBundle3D', class_names=class_names, with_label=False),
-    dict(type='CustomCollect3D', keys=['img','gt_occ'])
+    # dict(type='CustomCollect3D', keys=['img','gt_occ'])
+    dict(type='CustomCollect3D', keys=['img', 'gt_occ_other', 'gt_occ_road'])
 ]
 
 find_unused_parameters = True

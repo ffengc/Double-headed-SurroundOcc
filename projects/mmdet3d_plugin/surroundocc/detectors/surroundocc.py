@@ -108,14 +108,25 @@ class SurroundOcc(MVXTwoStageDetector):
 
     def forward_pts_train(self,
                           pts_feats,
-                          gt_occ,
+                          gt_occ_other,
+                          gt_occ_road, # modify by yufc
                           img_metas):
-
-        outs = self.pts_bbox_head(
-            pts_feats, img_metas)
-        loss_inputs = [gt_occ, outs]
-        losses = self.pts_bbox_head.loss(*loss_inputs, img_metas=img_metas)
-        return losses
+        # 这里也要弄 0605
+        outs_other, outs_road = self.pts_bbox_head(
+            pts_feats, img_metas)  # 这里输出两个out
+        # loss_inputs = [gt_occ, outs] 
+        loss_inputs_other = [gt_occ_other, outs_other] # modify by yufc
+        loss_inputs_road = [gt_occ_road, outs_road]
+        losses_other, losses_road = self.pts_bbox_head.loss(*loss_inputs_other, *loss_inputs_road, img_metas=img_metas) # modify by Yufc
+        # 遍历其中一个字典的键 # modify by Yufc
+        losses_added = {}
+        for key in losses_other:
+            # 对应的键的值相加并存储到新的字典
+            if key in losses_road:  # 检查键在第二个字典中是否存在
+                losses_added[key] = losses_other[key] + losses_road[key]
+            else:
+                assert(False)
+        return losses_added
 
     def forward_dummy(self, img):
         dummy_metas = None
@@ -140,58 +151,74 @@ class SurroundOcc(MVXTwoStageDetector):
     @auto_fp16(apply_to=('img', 'points'))
     def forward_train(self,
                       img_metas=None,
-                      gt_occ=None,
+                      # gt_occ=None,
+                      gt_occ_other=None, # modify by yufc
+                      gt_occ_road=None,
                       img=None
                       ):
 
         img_feats = self.extract_feat(img=img, img_metas=img_metas)
         losses = dict()
-        losses_pts = self.forward_pts_train(img_feats, gt_occ,
-                                             img_metas)
+        losses_pts = self.forward_pts_train(img_feats, gt_occ_other, gt_occ_road,
+                                             img_metas) # modify by yufc
 
         losses.update(losses_pts)
         return losses
 
-    def forward_test(self, img_metas, img=None, gt_occ=None, **kwargs):
-        
-        output = self.simple_test(
+    # def forward_test(self, img_metas, img=None, gt_occ=None, **kwargs): # 这里要改参数的名称 gt_occ -> gt_occ_other + gt_occ_road
+    def forward_test(self, img_metas, img=None, gt_occ_other=None, gt_occ_road=None, **kwargs): # 这里要改参数的名称 gt_occ -> gt_occ_other + gt_occ_road
+        # # modify by yufc
+        output_other, output_road = self.simple_test(
             img_metas, img, **kwargs)
         
-        pred_occ = output['occ_preds']
-        if type(pred_occ) == list:
-            pred_occ = pred_occ[-1]
+        # modify by Yufc
+        pred_occ_other = output_other['occ_preds']
+        pred_occ_road = output_road['occ_preds']
+        
+        # modify by Yufc
+        if type(pred_occ_other) == list:
+            pred_occ_other = pred_occ_other[-1]
+        if type(pred_occ_road) == list:
+            pred_occ_road = pred_occ_road[-1]
         
         if self.is_vis:
-            self.generate_output(pred_occ, img_metas)
-            return pred_occ.shape[0]
+            self.generate_output(pred_occ_other, img_metas) # mby
+            self.generate_output(pred_occ_road, img_metas)
+            return pred_occ_other.shape[0], pred_occ_road.shape[0]
 
         if self.use_semantic:
-            class_num = pred_occ.shape[1]
-            _, pred_occ = torch.max(torch.softmax(pred_occ, dim=1), dim=1)
-            eval_results = evaluation_semantic(pred_occ, gt_occ, img_metas[0], class_num)
+            class_num_other = pred_occ_other.shape[1] # mby
+            class_num_road = pred_occ_road.shape[1]
+            
+            _, pred_occ_other = torch.max(torch.softmax(pred_occ_other, dim=1), dim=1)
+            _, pred_occ_road = torch.max(torch.softmax(pred_occ_road, dim=1), dim=1)
+            
+            eval_results_other = evaluation_semantic(pred_occ_other, gt_occ_other, img_metas[0], class_num_other) # BUG
+            eval_results_road = evaluation_semantic(pred_occ_road, gt_occ_road, img_metas[0], class_num_road) # BUG
 
         else:
             pred_occ = torch.sigmoid(pred_occ[:, 0])
-            eval_results = evaluation_reconstruction(pred_occ, gt_occ, img_metas[0])
-        return {'evaluation': eval_results}
+            eval_results_other = evaluation_reconstruction(pred_occ, gt_occ_other, img_metas[0])    # mby
+            eval_results_road = evaluation_reconstruction(pred_occ, gt_occ_road, img_metas[0])    
+        return {'evaluation_other': eval_results_other, 'evaluation_road' : eval_results_road}
         
 
 
     def simple_test_pts(self, x, img_metas, rescale=False):
         """Test function"""
-        outs = self.pts_bbox_head(x, img_metas)
+        outs_other, outs_road = self.pts_bbox_head(x, img_metas)
 
-        return outs
+        return outs_other, outs_road
 
     def simple_test(self, img_metas, img=None, rescale=False):
         """Test function without augmentaiton."""
         img_feats = self.extract_feat(img=img, img_metas=img_metas)
 
         bbox_list = [dict() for i in range(len(img_metas))]
-        output = self.simple_test_pts(
+        output_other, output_road = self.simple_test_pts(
             img_feats, img_metas, rescale=rescale)
 
-        return output
+        return output_other, output_road
 
     def generate_output(self, pred_occ, img_metas):
         import open3d as o3d

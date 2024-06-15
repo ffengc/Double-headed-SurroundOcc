@@ -234,7 +234,7 @@ def main():
             model.cuda(),
             device_ids=[torch.cuda.current_device()],
             broadcast_buffers=False)
-        outputs = custom_multi_gpu_test(model, data_loader, args.tmpdir,
+        outputs1, outputs2 = custom_multi_gpu_test(model, data_loader, args.tmpdir,
                                         args.gpu_collect, args.is_vis)
     
     if args.is_vis:
@@ -250,7 +250,8 @@ def main():
         kwargs['jsonfile_prefix'] = osp.join('test', args.config.split(
             '/')[-1].split('.')[-2], time.ctime().replace(' ', '_').replace(':', '_'))
         if args.format_only:
-            dataset.format_results(outputs, **kwargs)
+            dataset.format_results(outputs1, **kwargs)
+            dataset.format_results(outputs2, **kwargs) # mby 0614
 
         if args.eval:
             eval_kwargs = cfg.get('evaluation', {}).copy()
@@ -262,7 +263,7 @@ def main():
                 eval_kwargs.pop(key, None)
             eval_kwargs.update(dict(metric=args.eval, **kwargs))
 
-            print(dataset.evaluate(outputs, **eval_kwargs))
+            print(dataset.evaluate(outputs1, outputs2, **eval_kwargs))
 
 
 if __name__ == '__main__':

@@ -27,7 +27,7 @@ class LoadOccupancy(object):
         occ = np.load(results['occ_path'])
         occ = occ.astype(np.float32)
         
-        # class 0 is 'ignore' class
+        # class 0 is 'ignore' class # 0忽略掉，所以这里改掉
         if self.use_semantic:
             occ[..., 3][occ[..., 3] == 0] = 255
         else:
